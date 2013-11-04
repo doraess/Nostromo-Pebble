@@ -4,7 +4,7 @@
 #include "pebble_os.h"
 #include "pebble_app.h"
 
-#define ERROR_FRAME      (GRect(25, 0, 30, 30))
+#define ERROR_FRAME      (GRect(20, 0, 30, 30))
 	
 enum LinkStatus
 {
@@ -21,14 +21,14 @@ extern TextLayer indicators_layer;
 extern BmpContainer icon_error; 
 extern BmpContainer icon_link;
 extern BmpContainer icon_battery;
+extern bool on_error;
 
 	
 void link_monitor_ping()
 {
 	//Sending ANY message to the phone would do
 	http_time_request();
-	psleep(200);
-	//http_battery_request();
+	
 }
 
 void link_monitor_handle_failure(int error)
@@ -64,6 +64,7 @@ void link_monitor_handle_failure(int error)
 			//weather_layer_set_icon(&weather_layer, WEATHER_ICON_LINK_ERROR);
 		    //text_layer_set_text(&weather_layer.street_layer, "iPhone no conectado");
 			//text_layer_set_text(&debug_layer, itoa(error));
+			on_error = true;
 			bmp_init_container(RESOURCE_ID_ERROR_1008, &icon_error);
 			layer_add_child(&indicators_layer.layer, &icon_error.layer.layer);
 			layer_set_frame(&icon_error.layer.layer, ERROR_FRAME);
@@ -71,11 +72,26 @@ void link_monitor_handle_failure(int error)
 			bmp_deinit_container(&icon_link);
 			break;
 		
+		case 1032: //APP_MSG_BUSY
+			//These are more likely to specify a temporary error than a lost watch
+			//weather_layer_set_icon(&weather_layer, WEATHER_ICON_APP_ERROR);
+		    //text_layer_set_text(&weather_layer.street_layer, "Conexion ocupada");
+			//text_layer_set_text(&debug_layer, itoa(error));
+			bmp_init_container(RESOURCE_ID_ERROR_1064, &icon_error);
+			layer_add_child(&indicators_layer.layer, &icon_error.layer.layer);
+			layer_set_frame(&icon_error.layer.layer, ERROR_FRAME);
+			return;
+			return;
+
 		case 1064: //APP_MSG_BUSY
 			//These are more likely to specify a temporary error than a lost watch
 			//weather_layer_set_icon(&weather_layer, WEATHER_ICON_APP_ERROR);
 		    //text_layer_set_text(&weather_layer.street_layer, "Conexion ocupada");
 			//text_layer_set_text(&debug_layer, itoa(error));
+			bmp_init_container(RESOURCE_ID_ERROR_1064, &icon_error);
+			layer_add_child(&indicators_layer.layer, &icon_error.layer.layer);
+			layer_set_frame(&icon_error.layer.layer, ERROR_FRAME);
+			return;
 			return;
 		
 		case 1128: //APP_MSG_BUSY

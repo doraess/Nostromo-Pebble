@@ -1,6 +1,26 @@
 {
     "media": [
         {
+            "defName": "BATTERY_2HALF",
+            "type": "png",
+            "file": "images/progress-2.png"
+        },
+        {
+            "defName": "BATTERY_EMPTY",
+            "type": "png",
+            "file": "images/battery-empty.png"
+        },
+        {
+            "defName": "BATTERY_1HALF",
+            "type": "png",
+            "file": "images/battery-half.png"
+        },
+        {
+            "defName": "BATTERY_CHARGING",
+            "type": "png",
+            "file": "images/battery-charging.png"
+        },
+        {
             "defName": "BATTERY_FULL",
             "type": "png",
             "file": "images/battery-full.png"

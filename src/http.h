@@ -1,3 +1,25 @@
+/*
+ * httpebble header
+ * Copyright (C) 2013 Katharine Berry
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 #ifndef HTTP_H
 #define HTTP_H
 
@@ -5,21 +27,21 @@
 
 // Shared values.
 typedef enum {
-	HTTP_OK 							= 0,
-	HTTP_SEND_TIMEOUT 					= APP_MSG_SEND_TIMEOUT,
-	HTTP_SEND_REJECTED					= APP_MSG_SEND_REJECTED,
-	HTTP_NOT_CONNECTED					= APP_MSG_NOT_CONNECTED,
-	HTTP_BRIDGE_NOT_RUNNING				= APP_MSG_APP_NOT_RUNNING,
-	HTTP_INVALID_ARGS					= APP_MSG_INVALID_ARGS,
-	HTTP_BUSY							= APP_MSG_BUSY,
-	HTTP_BUFFER_OVERFLOW				= APP_MSG_BUFFER_OVERFLOW,
-	HTTP_ALREADY_RELEASED				= APP_MSG_ALREADY_RELEASED,
-	HTTP_CALLBACK_ALREADY_REGISTERED	= APP_MSG_CALLBACK_ALREADY_REGISTERED,
-	HTTP_CALLBACK_NOT_REGISTERED		= APP_MSG_CALLBACK_NOT_REGISTERED,
-	HTTP_NOT_ENOUGH_STORAGE				= DICT_NOT_ENOUGH_STORAGE << 12,
-	HTTP_INVALID_DICT_ARGS				= DICT_INVALID_ARGS << 12,
-	HTTP_INTERNAL_INCONSISTENCY			= DICT_INTERNAL_INCONSISTENCY << 12,
-	HTTP_INVALID_BRIDGE_RESPONSE		= 1 << 17
+    HTTP_OK                             = 0,
+    HTTP_SEND_TIMEOUT                   = APP_MSG_SEND_TIMEOUT,
+    HTTP_SEND_REJECTED                  = APP_MSG_SEND_REJECTED,
+    HTTP_NOT_CONNECTED                  = APP_MSG_NOT_CONNECTED,
+    HTTP_BRIDGE_NOT_RUNNING             = APP_MSG_APP_NOT_RUNNING,
+    HTTP_INVALID_ARGS                   = APP_MSG_INVALID_ARGS,
+    HTTP_BUSY                           = APP_MSG_BUSY,
+    HTTP_BUFFER_OVERFLOW                = APP_MSG_BUFFER_OVERFLOW,
+    HTTP_ALREADY_RELEASED               = APP_MSG_ALREADY_RELEASED,
+    HTTP_CALLBACK_ALREADY_REGISTERED    = APP_MSG_CALLBACK_ALREADY_REGISTERED,
+    HTTP_CALLBACK_NOT_REGISTERED        = APP_MSG_CALLBACK_NOT_REGISTERED,
+    HTTP_NOT_ENOUGH_STORAGE             = DICT_NOT_ENOUGH_STORAGE << 12,
+    HTTP_INVALID_DICT_ARGS              = DICT_INVALID_ARGS << 12,
+    HTTP_INTERNAL_INCONSISTENCY         = DICT_INTERNAL_INCONSISTENCY << 12,
+    HTTP_INVALID_BRIDGE_RESPONSE        = 1 << 17
 } HTTPResult;
 
 // HTTP Request callbacks
@@ -36,23 +58,26 @@ typedef void(*HTTPPhoneCookieDeleteHandler)(int32_t request_id, bool success, vo
 typedef void(*HTTPTimeHandler)(int32_t utc_offset_seconds, bool is_dst, uint32_t unixtime, const char* tz_name, void* context);
 // Location callback
 typedef void(*HTTPLocationHandler)(float latitude, float longitude, float altitude, float accuracy, void* context);
+// Battery callback
+typedef void(*HTTPBatteryHandler)(int32_t status, int32_t level, void* context);
 
 // HTTP stuff
 typedef struct {
-	HTTPRequestFailedHandler failure;
-	HTTPRequestSucceededHandler success;
-	HTTPReconnectedHandler reconnect;
-	HTTPPhoneCookieGetHandler cookie_get;
-	HTTPPhoneCookieBatchGetHandler cookie_batch_get;
-	HTTPPhoneCookieSetHandler cookie_set;
-	HTTPPhoneCookieFsyncHandler cookie_fsync;
-	HTTPPhoneCookieDeleteHandler cookie_delete;
-	HTTPTimeHandler time;
-	HTTPLocationHandler location;
+    HTTPRequestFailedHandler failure;
+    HTTPRequestSucceededHandler success;
+    HTTPReconnectedHandler reconnect;
+    HTTPPhoneCookieGetHandler cookie_get;
+    HTTPPhoneCookieBatchGetHandler cookie_batch_get;
+    HTTPPhoneCookieSetHandler cookie_set;
+    HTTPPhoneCookieFsyncHandler cookie_fsync;
+    HTTPPhoneCookieDeleteHandler cookie_delete;
+    HTTPTimeHandler time;
+    HTTPLocationHandler location;
+	HTTPBatteryHandler battery;
 } HTTPCallbacks;
 
 // HTTP requests
-HTTPResult http_out_get(const char* url, int32_t request_id, DictionaryIterator **iter_out);
+HTTPResult http_out_get(const char* url, bool use_post, int32_t cookie, DictionaryIterator **iter_out);
 HTTPResult http_out_send();
 bool http_register_callbacks(HTTPCallbacks callbacks, void* context);
 
@@ -62,11 +87,12 @@ HTTPResult http_time_request();
 // Location information
 HTTPResult http_location_request();
 
-// Logging information
-HTTPResult http_log(const char* value);
-
-// Battery information
+// Battery stuff
 HTTPResult http_battery_request();
+
+// Battery stuff
+HTTPResult http_log_request(char *message);
+
 
 // Local cookies
 // Basic API

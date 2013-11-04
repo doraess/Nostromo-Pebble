@@ -3,6 +3,7 @@
 #include "pebble_fonts.h"
 
 #include "http.h"
+#include "httpcapture.h"
 #include "util.h"
 #include "weather_layer.h"
 #include "time_layer.h"
@@ -19,11 +20,12 @@ PBL_APP_INFO(MY_UUID,
 
 #define TIME_FRAME      (GRect(0, 2, 144, 162))
 #define DATE_FRAME      (GRect(0, 55, 144, 25))
-#define INDICATORS_FRAME      (GRect(5, 75, 144, 30))
+#define INDICATORS_FRAME      (GRect(0, 75, 144, 30))
 #define LINK_FRAME      (GRect(0, 0, 30, 30))
 #define ERROR_FRAME      (GRect(25, 0, 30, 30))
 #define BATTERY_FRAME      (GRect(50, 0, 30, 30))
-#define UPDATE_FRAME      (GRect(95, 82, 100, 30))
+#define BATTERY_LEVEL_FRAME      (GRect(75, 7, 30, 30))
+#define UPDATE_FRAME      (GRect(80, 7, 60, 30))
 
 // POST variables
 #define WEATHER_KEY_LATITUDE 1
@@ -38,12 +40,15 @@ PBL_APP_INFO(MY_UUID,
 	
 #define WEATHER_HTTP_COOKIE 1949327671
 #define TIME_HTTP_COOKIE 1131038282
+	
+#define MAKE_SCREENSHOT 1
 
 Window window;          /* main window */
 TextLayer date_layer;   /* layer for the date */
 TimeLayer time_layer;   /* layer for the time */
 TextLayer updated_layer;   /* layer for last update */
 TextLayer indicators_layer;   /* layer for last update */
+TextLayer battery_level_layer;   /* layer for battery level */
 
 BmpContainer icon_error; 
 BmpContainer icon_link;
@@ -79,9 +84,12 @@ char *months[]={
   "Dic"
 };
 
+int32_t battery_level = 0; 
+
 //Weather Stuff
 static int our_latitude, our_longitude;
 static bool located = false;
+bool on_error = false;
 
 WeatherLayer weather_layer;
 
@@ -92,11 +100,11 @@ void failed(int32_t cookie, int http_status, void* context) {
 	char buffer [50];
 	if (cookie == 1) {
 		snprintf(buffer, 50, "[%4d] Send error", http_status);
-		http_log(buffer);
+		//http_log(buffer);
 	}
 	else if (cookie == 2) {
 		snprintf(buffer, 50, "[%4d] Recv error", http_status);
-		http_log(buffer);
+		//http_log(buffer);
 	}
 	
 	link_monitor_handle_failure(http_status);
@@ -138,13 +146,17 @@ void success(int32_t cookie, int http_status, DictionaryIterator* received, void
     
 	link_monitor_handle_success();
 	
-	layer_remove_from_parent(&icon_error.layer.layer);
-	bmp_deinit_container(&icon_error);
+	if (!on_error) {
+		layer_remove_from_parent(&icon_error.layer.layer);
+	    bmp_deinit_container(&icon_error);
+	}
 	layer_remove_from_parent(&icon_link.layer.layer);
 	bmp_deinit_container(&icon_link);
 	bmp_init_container(RESOURCE_ID_INDICATOR_LINK, &icon_link);
 	layer_add_child(&indicators_layer.layer, &icon_link.layer.layer);
 	layer_set_frame(&icon_link.layer.layer, LINK_FRAME);
+	
+	http_battery_request();
 }
 
 void location(float latitude, float longitude, float altitude, float accuracy, void* context) {
@@ -162,6 +174,40 @@ void location(float latitude, float longitude, float altitude, float accuracy, v
 	layer_add_child(&indicators_layer.layer, &icon_link.layer.layer);
 	layer_set_frame(&icon_link.layer.layer, LINK_FRAME);
 }
+
+void battery(int32_t status, int32_t level, void* context) {
+
+	static char level_text[] = "00%";
+	snprintf(level_text, sizeof(level_text), "%s%%", itoa(level));
+	text_layer_set_text(&battery_level_layer, level_text);
+	//layer_remove_from_parent(&icon_battery.layer.layer);
+	//bmp_deinit_container(&icon_battery);
+	battery_level = level;
+	//int division = level/33;
+	//switch (division){
+	//	case 0:	bmp_init_container(RESOURCE_ID_BATTERY_EMPTY, &icon_battery);
+	//			break;
+	//	case 1:	bmp_init_container(RESOURCE_ID_BATTERY_1HALF, &icon_battery);
+	//			break;
+	//	case 2:	bmp_init_container(RESOURCE_ID_BATTERY_2HALF, &icon_battery);
+	//			break;
+	//	case 3:	bmp_init_container(RESOURCE_ID_BATTERY_FULL, &icon_battery);
+	//			break;
+	//	default:break;
+	//	
+	//}
+	//layer_add_child(&indicators_layer.layer, &icon_battery.layer.layer);
+	//layer_set_frame(&icon_battery.layer.layer, BATTERY_FRAME);
+	layer_mark_dirty(&indicators_layer.layer);
+}
+
+void indicators_layer_update_callback(Layer *me, GContext* ctx) {
+	graphics_context_set_fill_color(ctx, GColorWhite);
+	graphics_context_set_stroke_color(ctx, GColorWhite);
+	graphics_draw_rect(ctx, GRect(50, 10, 22, 9));
+	graphics_fill_rect(ctx, GRect(52, 12, 18*battery_level/100, 5), 0, GCornerNone);
+}
+
 
 void reconnect(void* context) {
 	located = false;
@@ -231,6 +277,7 @@ void handle_minute_tick(AppContextRef ctx, PebbleTickEvent *t)
 	{
 		//Every 15 minutes, request updated weather
 		http_location_request();
+		
 	}
 	else
 	{
@@ -278,22 +325,33 @@ void handle_init(AppContextRef ctx)
     layer_set_frame(&date_layer.layer, DATE_FRAME);
     layer_add_child(&window.layer, &date_layer.layer);
 	
-	text_layer_init(&updated_layer, window.layer.frame);
-    text_layer_set_text_color(&updated_layer, GColorWhite);
-    text_layer_set_background_color(&updated_layer, GColorClear);
-    text_layer_set_font(&updated_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_STREET_FUTURA_12)));
-    text_layer_set_text_alignment(&updated_layer, GTextAlignmentLeft);
-    layer_set_frame(&updated_layer.layer, UPDATE_FRAME);
-    layer_add_child(&window.layer, &updated_layer.layer);
-	text_layer_set_text(&updated_layer, "@00:00");
 	
-	text_layer_init(&indicators_layer, window.layer.frame);
+	text_layer_init(&indicators_layer, INDICATORS_FRAME);
 	text_layer_set_text_color(&indicators_layer, GColorWhite);
     text_layer_set_background_color(&indicators_layer, GColorClear);
     text_layer_set_font(&indicators_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_STREET_FUTURA_12)));
     text_layer_set_text_alignment(&indicators_layer, GTextAlignmentLeft);
-    layer_set_frame(&indicators_layer.layer, INDICATORS_FRAME);
+    //layer_set_frame(&indicators_layer.layer, INDICATORS_FRAME);
     layer_add_child(&window.layer, &indicators_layer.layer);
+    indicators_layer.layer.update_proc = &indicators_layer_update_callback;
+ 
+
+	text_layer_init(&updated_layer, UPDATE_FRAME);
+    text_layer_set_text_color(&updated_layer, GColorWhite);
+    text_layer_set_background_color(&updated_layer, GColorClear);
+    text_layer_set_font(&updated_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_STREET_FUTURA_12)));
+    text_layer_set_text_alignment(&updated_layer, GTextAlignmentRight);
+    //layer_set_frame(&updated_layer.layer, UPDATE_FRAME);
+    layer_add_child(&indicators_layer.layer, &updated_layer.layer);
+	text_layer_set_text(&updated_layer, "@00:00");
+	
+	text_layer_init(&battery_level_layer, BATTERY_LEVEL_FRAME);
+	text_layer_set_text_color(&battery_level_layer, GColorWhite);
+    text_layer_set_background_color(&battery_level_layer, GColorClear);
+    text_layer_set_font(&battery_level_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_STREET_FUTURA_12)));
+    text_layer_set_text_alignment(&battery_level_layer, GTextAlignmentLeft);
+    //layer_set_frame(&battery_level_layer.layer, BATTERY_LEVEL_FRAME);
+    layer_add_child(&indicators_layer.layer, &battery_level_layer.layer);
 	
 	bmp_init_container(RESOURCE_ID_INDICATOR_LINK, &icon_link);
 	layer_add_child(&indicators_layer.layer, &icon_link.layer.layer);
@@ -303,9 +361,9 @@ void handle_init(AppContextRef ctx)
 	layer_add_child(&indicators_layer.layer, &icon_error.layer.layer);
 	layer_set_frame(&icon_error.layer.layer, ERROR_FRAME);
 	
-	bmp_init_container(RESOURCE_ID_BATTERY_FULL, &icon_battery);
-	layer_add_child(&indicators_layer.layer, &icon_battery.layer.layer);
-	layer_set_frame(&icon_battery.layer.layer, BATTERY_FRAME);
+	//bmp_init_container(RESOURCE_ID_BATTERY_FULL, &icon_battery);
+	//layer_add_child(&indicators_layer.layer, &icon_battery.layer.layer);
+	//layer_set_frame(&icon_battery.layer.layer, BATTERY_FRAME);
 	
 	// Add weather layer
 	weather_layer_init(&weather_layer, GPoint(0, 90)); //0, 100
@@ -315,7 +373,9 @@ void handle_init(AppContextRef ctx)
 		.failure=failed,
 		.success=success,
 		.reconnect=reconnect,
-		.location=location}
+		.location=location,
+		.battery=battery
+	}
 	, (void*)ctx);
 	
 	// Refresh time
@@ -324,6 +384,7 @@ void handle_init(AppContextRef ctx)
     t.units_changed = SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT;
 	
 	handle_minute_tick(ctx, &t);
+    http_capture_init(ctx);
 }
 
 /* Shut down the application
@@ -363,6 +424,8 @@ void pbl_main(void *params)
 		}
     };
 
+    http_capture_main(&handlers);
+
     app_event_loop(params, &handlers);
 }
 
@@ -373,7 +436,7 @@ void request_weather() {
 	}
 	// Build the HTTP request
 	DictionaryIterator *body;
-	HTTPResult result = http_out_get("http://doraess.no-ip.org:3000", WEATHER_HTTP_COOKIE, &body);
+	HTTPResult result = http_out_get("http://doraess.no-ip.org:3000", false, WEATHER_HTTP_COOKIE, &body);
 	if(result != HTTP_OK) {
 		weather_layer_set_icon(&weather_layer, WEATHER_ICON_NO_WEATHER);
 		return;
@@ -386,4 +449,5 @@ void request_weather() {
 		weather_layer_set_icon(&weather_layer, WEATHER_ICON_NO_WEATHER);
 		return;
 	}
+	
 }
